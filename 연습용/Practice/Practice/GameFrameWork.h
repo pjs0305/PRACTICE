@@ -104,5 +104,8 @@ private:
 
 	// 프레임 레이트를 주 윈도우의 타이틀에 출력하기 위한 문자열
 	_TCHAR m_pszFrameRate[50];
+
+public:
+	void OnResizeBackBuffers();
 };
 

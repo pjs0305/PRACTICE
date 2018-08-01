@@ -1,7 +1,9 @@
 ﻿  GameFrameWork.cpp
+f:\연습\practice\연습용\practice\practice\gameframework.cpp(144): warning C4067: 전처리기 지시문 다음에 예기치 않은 토큰이 있습니다. 줄 바꿈 문자가 필요합니다.
   코드를 생성하고 있습니다.
-  1 of 34 functions ( 2.9%) were compiled, the rest were copied from previous compilation.
-    0 functions were new in current compilation
+f:\연습\practice\연습용\practice\practice\practice.cpp(65): warning C4715: 'wWinMain': 모든 제어 경로에서 값을 반환하지는 않습니다.
+  10 of 35 functions (28.6%) were compiled, the rest were copied from previous compilation.
+    1 functions were new in current compilation
     1 functions had inline decision re-evaluated but remain unchanged
   코드를 생성했습니다.
   Practice.vcxproj -> F:\연습\PRACTICE\연습용\Practice\Release\Practice.exe

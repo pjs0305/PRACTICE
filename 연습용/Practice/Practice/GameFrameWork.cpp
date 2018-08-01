@@ -45,8 +45,6 @@ bool GameFrameWork::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 	CreateCommandQueueAndList();
 	CreateSwapChain();
 	CreateRtvAndDsvDescriptorHeaps();
-	CreateRenderTargetView();
-	CreateDepthStencilView();
 
 	// 렌더링할 객체를 생성
 	BuildObjects();
@@ -84,6 +82,42 @@ void GameFrameWork::OnDestroy()
 	if (m_dxgiFactory) m_dxgiFactory->Release();
 }
 
+void GameFrameWork::OnResizeBackBuffers()
+{
+	WaitForGPUComplete();
+
+	m_d3dCommandList->Reset(m_d3dCommandAllocator, NULL);
+	
+	for (int i = 0; i < m_SwapChainBuffers; i++)
+	{
+		if (m_d3dRenderTargetBuffers[i])
+		{
+			m_d3dRenderTargetBuffers[i]->Release();
+		}
+	}
+#ifdef _WITH_ONLY_RESIZE_BACKBUFFERS
+	DXGI_SWAP_CHAIN_DESC dxgiSwapChainDesc;
+	m_dxgiSwapChain->GetDesc(&dxgiSwapChainDesc);
+	m_dxgiSwapChain->ResizeBuffers(0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
+	m_SwapChainBufferIndex = 0;
+#else
+	DXGI_SWAP_CHAIN_DESC dxgiSwapChainDesc;
+	m_dxgiSwapChain->GetDesc(&dxgiSwapChainDesc);
+	m_dxgiSwapChain->ResizeBuffers(m_SwapChainBuffers, m_WndClientWidth, m_WndClientHeight,
+		dxgiSwapChainDesc.BufferDesc.Format, dxgiSwapChainDesc.Flags);
+	m_SwapChainBufferIndex = 0;
+#endif
+	CreateRenderTargetView();
+	CreateDepthStencilView();
+
+	m_d3dCommandList->Close();
+
+	ID3D12CommandList* d3dCommandLists[] = { m_d3dCommandList };
+	m_d3dCommandQueue->ExecuteCommandLists(1, d3dCommandLists);
+
+	WaitForGPUComplete();
+}
+
 void GameFrameWork::CreateSwapChain()
 {
 	// 스왑 체인할 화면 크기 설정
@@ -92,31 +126,33 @@ void GameFrameWork::CreateSwapChain()
 	m_WndClientWidth = rcClient.right - rcClient.left;
 	m_WndClientHeight = rcClient.bottom - rcClient.top;
 
-	DXGI_SWAP_CHAIN_DESC1 dxgiSwapChainDesc;
+	DXGI_SWAP_CHAIN_DESC dxgiSwapChainDesc;
 	::ZeroMemory(&dxgiSwapChainDesc, sizeof(dxgiSwapChainDesc));
-	dxgiSwapChainDesc.Width = m_WndClientWidth;
-	dxgiSwapChainDesc.Height = m_WndClientHeight;
-	dxgiSwapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	dxgiSwapChainDesc.BufferDesc.Width = m_WndClientWidth;
+	dxgiSwapChainDesc.BufferDesc.Height = m_WndClientHeight;
+	dxgiSwapChainDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	dxgiSwapChainDesc.BufferDesc.RefreshRate.Numerator = 60;
+	dxgiSwapChainDesc.BufferDesc.RefreshRate.Denominator = 1;
 	dxgiSwapChainDesc.SampleDesc.Count = (m_MSAA4xEnable) ? 4 : 1;
 	dxgiSwapChainDesc.SampleDesc.Quality = (m_MSAA4xEnable) ? (m_MSAA4xQualityLevels - 1) : 0;
 	dxgiSwapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT; // 렌더 타겟으로 사용
 	dxgiSwapChainDesc.BufferCount = m_SwapChainBuffers;
-	dxgiSwapChainDesc.Scaling = DXGI_SCALING_NONE;
 	dxgiSwapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD; // 스와핑 후 값 삭제
-	dxgiSwapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-	dxgiSwapChainDesc.Flags = 0;
+	dxgiSwapChainDesc.OutputWindow = m_hwnd;
+	dxgiSwapChainDesc.Windowed = TRUE;
 
-	DXGI_SWAP_CHAIN_FULLSCREEN_DESC dxgiSwapChainFullScreenDesc;
-	::ZeroMemory(&dxgiSwapChainFullScreenDesc, sizeof(dxgiSwapChainFullScreenDesc));
-	dxgiSwapChainFullScreenDesc.RefreshRate.Numerator = 60;
-	dxgiSwapChainFullScreenDesc.RefreshRate.Denominator = 1;
-	dxgiSwapChainFullScreenDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
-	dxgiSwapChainFullScreenDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
-	dxgiSwapChainFullScreenDesc.Windowed = TRUE;
+#ifdef _WITH_ONLY_RESIZE_BACKBUFFERS;
+	// 전체화면 모드에서 바탕화면의 해상도를 바꾸지 않고 후면버퍼의 크기를 바탕화면 크기로 변경
+	dxgiSwapChainDesc.Flags = 0;
+#else
+	// 전체화면 모드에서 바탕화면의 해상도를 스왑체인(후면버퍼)의 크기에 맞게 변경
+	dxgiSwapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+#endif
+
 
 	// 스왑체인 생성
-	m_dxgiFactory->CreateSwapChainForHwnd(m_d3dCommandQueue, m_hwnd, &dxgiSwapChainDesc,
-		&dxgiSwapChainFullScreenDesc, NULL, (IDXGISwapChain1**)&m_dxgiSwapChain);
+	HRESULT hResult = m_dxgiFactory->CreateSwapChain(m_d3dCommandQueue,
+		&dxgiSwapChainDesc, (IDXGISwapChain**)&m_dxgiSwapChain);
 
 	// Alt + Enter키로 화면 크기 변환 비활성화
 	m_dxgiFactory->MakeWindowAssociation(m_hwnd, DXGI_MWA_NO_ALT_ENTER);
@@ -331,10 +367,24 @@ void GameFrameWork::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPAR
 			break;
 		case VK_RETURN:
 			break;
-		case VK_F8:
+		case VK_F9: // 전체화면 동작키
+		{
+			BOOL FullScreenState = FALSE;
+			m_dxgiSwapChain->GetFullscreenState(&FullScreenState, NULL);
+			m_dxgiSwapChain->SetFullscreenState(!FullScreenState, NULL);
+			DXGI_MODE_DESC dxgiTargetParameters;
+			dxgiTargetParameters.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+			dxgiTargetParameters.Width = m_WndClientWidth;
+			dxgiTargetParameters.Height = m_WndClientHeight;
+			dxgiTargetParameters.RefreshRate.Numerator = 60;
+			dxgiTargetParameters.RefreshRate.Denominator = 1;
+			dxgiTargetParameters.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
+			dxgiTargetParameters.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
+			m_dxgiSwapChain->ResizeTarget(&dxgiTargetParameters);
+
+			OnResizeBackBuffers();
 			break;
-		case VK_F9:
-			break;
+		}
 		default:
 			break;
 		}
@@ -349,10 +399,21 @@ LRESULT CALLBACK GameFrameWork::OnProcessingWindowMessage(HWND hWnd, UINT nMessa
 {
 	switch (nMessageID)
 	{
-	case WM_SIZE:
+	case WM_ACTIVATE:
+	{
+		//if (LOWORD(wParam) == WA_INACTIVE)
+		//	m_GameTimer.Stop();
+		//else
+		//	m_GameTimer.Start();
+		break;
+	}
+	case WM_SIZE: // 윈도우가 생성될 때 혹은 윈도우 크기가 변경될 때 호출.
 	{
 		m_WndClientWidth = LOWORD(lParam);
 		m_WndClientHeight = HIWORD(lParam);
+
+		// 윈도우 크기가 변경되면 후면 버퍼의 크기를 변경
+		OnResizeBackBuffers();
 		break;
 	}
 	case WM_LBUTTONDOWN:
