@@ -1,4 +1,6 @@
 #pragma once
+#include"GameTimer.h"
+
 class GameFrameWork
 {
 private:
@@ -95,5 +97,12 @@ public:
 	void OnProcessingMouseMessage(HWND hWnd, UINT MessageID, WPARAM wParam, LPARAM lParam);
 	void OnProcessingKeyboardMessage(HWND hWnd, UINT MessageID, WPARAM wParam, LPARAM lParam);
 	LRESULT CALLBACK OnProcessingWindowMessage(HWND hWnd, UINT MessageID, WPARAM wParam, LPARAM lParam);
+
+private:
+	// 게임 프레임워크에서 사용할 타이머
+	GameTimer m_GameTimer;
+
+	// 프레임 레이트를 주 윈도우의 타이틀에 출력하기 위한 문자열
+	_TCHAR m_pszFrameRate[50];
 };
 

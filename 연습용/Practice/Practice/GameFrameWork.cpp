@@ -30,6 +30,8 @@ GameFrameWork::GameFrameWork()
 
 	m_WndClientWidth = FRAME_BUFFER_WIDTH;
 	m_WndClientWidth = FRAME_BUFFER_HEIGHT;
+
+	_tcscpy_s(m_pszFrameRate, _T("Practice ("));
 }
 
 bool GameFrameWork::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
@@ -395,6 +397,8 @@ void GameFrameWork::WaitForGPUComplete()
 
 void GameFrameWork::FrameAdvance()
 {
+	m_GameTimer.Tick(0.f);
+
 	ProcessInput();
 
 	AnimateObjects();
@@ -475,6 +479,12 @@ void GameFrameWork::FrameAdvance()
 	m_dxgiSwapChain->Present1(1, 0, &dxgiPresentParameters);
 
 	m_SwapChainBufferIndex = m_dxgiSwapChain->GetCurrentBackBufferIndex();
+
+	// 현재의 프레임 레이트를 문자열로 가져와서 주 윈도우의 타이틀로 출력
+	// m_pszBuffer 문자열이 "Practice ("으로 초기화되었으므로 (m_pszFrameRate+12)에서부터
+	// 프레임 레이트를 문자열로 출력하여 " FPS)" 문자열과 합친다.
+	m_GameTimer.GetFrameRate(m_pszFrameRate + 10, 37);
+	::SetWindowText(m_hwnd, m_pszFrameRate);
 }
 
 GameFrameWork::~GameFrameWork()
